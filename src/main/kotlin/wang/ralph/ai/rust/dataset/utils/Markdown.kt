@@ -9,7 +9,11 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Comment
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.TextNode
+import org.jsoup.select.Elements
 import org.slf4j.LoggerFactory
+import java.io.File
+import java.io.Reader
+import java.io.Writer
 import org.jsoup.nodes.Node as HtmlNode
 import org.jsoup.parser.Parser as JsoupParser
 
@@ -40,11 +44,43 @@ class Markdown {
             }
     }
 
-    fun fromHtml(html: String): String {
-        val doc = Jsoup.parse(html)
-        doc.outputSettings().prettyPrint(false)
+    fun markdownToHtml(markdown: Reader, html: Writer) {
+        val input = markdown.readText()
+        val output = toHtml(input)
+        html.write(output)
+    }
 
-        return domToMarkdown(doc).lines().joinToString("\n") { it.trimEnd() }
+    fun fromHtml(
+        html: String,
+        contentSelector: (doc: org.jsoup.nodes.Document) -> Elements = { it.select("body") }
+    ): String {
+        val normalizedHtml =
+            Regex("""^( *)(<a class="header" href=".*?" id=".*?">)<h(\d+)>(.*)</h\3></a>$""", RegexOption.MULTILINE)
+                .replace(html, """$1<h$3>$2$4</a></h$3>""")
+
+        val doc = Jsoup.parse(normalizedHtml)
+        doc.outputSettings().prettyPrint(false)
+        val contents = contentSelector(doc)
+        val markdown = contents.joinToString("\n") { domToMarkdown(it) }
+        return markdown.trim() + "\n"
+    }
+
+    fun htmlToMarkdown(
+        html: Reader, markdown: Writer,
+        contentSelector: (doc: org.jsoup.nodes.Document) -> Elements = { it.select("body") }
+    ) {
+        val input = html.readText()
+        val output = fromHtml(input, contentSelector)
+        markdown.write(output)
+    }
+
+    fun htmlToMarkdown(
+        html: File, markdown: File,
+        contentSelector: (doc: org.jsoup.nodes.Document) -> Elements = { it.select("body") }
+    ) {
+        val input = html.readText()
+        val output = fromHtml(input, contentSelector)
+        markdown.writeText(output)
     }
 
     fun toPlainText(markdown: String): String {
@@ -60,6 +96,7 @@ class Markdown {
             domToMarkdown(it)
         }
         val markdown = when (nodeName) {
+            "main" -> children
             "h1" -> "\n# $children\n"
             "h2" -> "\n## $children\n"
             "h3" -> "\n### $children\n"

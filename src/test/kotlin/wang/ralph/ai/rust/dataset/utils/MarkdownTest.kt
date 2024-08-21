@@ -1,7 +1,9 @@
 package wang.ralph.ai.rust.dataset.utils
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+import java.io.File
 
 class MarkdownTest {
     private val markdown = Markdown()
@@ -137,6 +139,34 @@ R: b"""
             """[Link]
 L-R: b
 R-L: c"""
+        )
+    }
+
+    @Test
+    @Disabled
+    fun convertAllHtmlFilesToMarkdown() {
+        val markdown = Markdown()
+        val files = File("../doc.rust-lang.org").walk().filter { it.isFile && it.extension == "html" }
+        files.forEach { file ->
+            val markdownFile = File(file.path.replace(Regex("""\.html$"""), ".md"))
+            markdown.htmlToMarkdown(file, markdownFile) {
+                it.select("#content main")
+            }
+        }
+    }
+
+    @Test
+    @Disabled
+    fun convertOneHtmlFileToMarkdown() {
+        val markdown = Markdown()
+        val input = File("../doc.rust-lang.org/1.30.0/book/second-edition/appendix-00.html")
+        val output = markdown.fromHtml(input.readText()) { it.select("#content main") }
+        assertThat(output).isEqualTo(
+            """# [Appendix](appendix-00.html#appendix)
+
+The following sections contain reference material you may find useful in your
+Rust journey.
+"""
         )
     }
 }
