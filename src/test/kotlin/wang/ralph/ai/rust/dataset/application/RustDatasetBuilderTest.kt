@@ -13,9 +13,10 @@ class RustDatasetBuilderTest {
     @Autowired
     lateinit var builder: RustDatasetBuilder
 
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     @Test
     fun extractDatasetFromRustDocs() {
-        val logger = LoggerFactory.getLogger(javaClass)
         val files = File("../doc.rust-lang.org").walk()
             .filter { it.isFile && it.extension == "md" && it.toPath().name != "print.md" }
         for (file in files) {
@@ -27,5 +28,13 @@ class RustDatasetBuilderTest {
                 jsonlFile.writeText(dataset)
             }
         }
+    }
+
+    @Test
+    fun testCombineDataset() {
+        val files = File("../doc.rust-lang.org").walk()
+            .filter { it.isFile && it.extension == "jsonl" && it.name != "dataset.jsonl" }
+        val result = builder.combineDataset(files)
+        File("../doc.rust-lang.org/dataset.jsonl").writeText(result)
     }
 }

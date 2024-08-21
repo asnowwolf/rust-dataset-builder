@@ -1,13 +1,18 @@
 package wang.ralph.ai.rust.dataset.application
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import org.slf4j.LoggerFactory
 import org.springframework.ai.chat.messages.AssistantMessage
 import org.springframework.ai.chat.messages.UserMessage
 import org.springframework.ai.chat.model.ChatModel
 import org.springframework.stereotype.Component
 import wang.ralph.ai.rust.dataset.utils.extractJsonlContent
+import java.io.File
 
 @Component
-class RustDatasetBuilder(private val chatModel: ChatModel) {
+class RustDatasetBuilder(private val chatModel: ChatModel, private val objectMapper: ObjectMapper) {
+    private val logger = LoggerFactory.getLogger(javaClass)
     fun extractDataset(docMarkdown: String): String {
         val question =
             """### [Installing `rustup` on Windows](ch01-01-installation.html#installing-rustup-on-windows)
@@ -57,5 +62,24 @@ $answer
             chatModel.call(systemInstruction, AssistantMessage("ok"), UserMessage(docMarkdown))
         val content = extractJsonlContent(result)
         return content
+    }
+
+    data class DatasetEntry(val question: String, val answer: String, var context: String? = null)
+
+    fun combineDataset(files: Sequence<File>): String {
+        val allEntries = files.flatMap { file ->
+            logger.info("正在读取 {}", file.path)
+            val jsonl = file.readText().split("\n").filter { it.isNotEmpty() };
+            val html = File(file.path.replace(Regex(".jsonl$"), ".html")).readText()
+            val title = Regex(
+                "^ +<title>(.*) - The Rust Programming Language</title>$",
+                RegexOption.MULTILINE
+            ).find(html)?.groupValues?.get(1)
+                ?: throw IllegalArgumentException("在对应的 html 文件中没有找到标题。")
+            val entries = jsonl.map { objectMapper.readValue<DatasetEntry>(it).copy(context = "Rust - $title") }
+            entries
+        }
+        val dataset = allEntries.joinToString("\n") { objectMapper.writeValueAsString(it) }
+        return dataset
     }
 }
